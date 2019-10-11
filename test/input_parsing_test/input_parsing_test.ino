@@ -1,5 +1,5 @@
-#define PRO 2
-#define TRI	3
+#define TRI 2
+#define PRO	3
 #define REL	4
 
 #define DOWN LOW
@@ -67,14 +67,9 @@ void loop() {
 	if(pro_state == DOWN) {
 		pro_len += (millis() - cycle_start);
 	}
-}
 
-void swap_rel() {
-	if(digitalRead(REL) == HIGH) {
-		digitalWrite(REL, LOW);
-	} else {
-		digitalWrite(REL, HIGH);
-	}
+	digitalWrite(REL, relay_state);
+	//Serial.println(relay_state);
 }
 
 //Called when there's a change in the state of programming
