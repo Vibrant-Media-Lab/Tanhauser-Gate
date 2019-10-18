@@ -69,7 +69,7 @@ void loop() {
 	}
 
 	digitalWrite(REL, relay_state);
-	//Serial.println(relay_state);
+	Serial.println(pro_len);
 }
 
 //Called when there's a change in the state of programming

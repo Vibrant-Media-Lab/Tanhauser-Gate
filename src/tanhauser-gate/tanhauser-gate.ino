@@ -1,63 +1,153 @@
-#define PROG_BTN  2
-#define TRIG_BTN  3
-#define RELAY     4
+/**
+ * OdysseyNow Computer Controller
+ * Author: Joshua Arabia
+ * Pitt Vibrant Media Lab: 2019
+ */
 
-//TIMING
-volatile long prog_down = 0;
-volatile long prog_dur = 0;
-volatile long relay_active = 0;
+#define TRIGGER_BUTTON  	2
+#define PROGRAMMING_BUTTON 	3
+#define RELAY     			4
+
+// Associate physical button states with their output
+#define UP 					HIGH
+#define DOWN 				LOW
+
+// Define the two major modes for automated state switching
+enum mode {
+	NONE,
+	PATTERN,
+	RANDOM
+};
+
+	// GENERAL TIMING //
+const long contact_bounce = 50;
+const long long_press_threshold = 2000;
+long standby_bounce = 0;
+
+unsigned long next_relay_swap = 0;
+long cycle_start;
+
+	// PROGRAMMING //
+volatile int programming_button_state = UP;
+volatile unsigned long programming_button_last_input = 0;
+volatile unsigned long programming_button_hold_duration = 0;
+
+	// TRIGGER //
+const long trigger_active_period = 67; // Roughly 1/15 s
+volatile int trigger_button_state = UP;
+volatile unsigned long trigger_button_last_input = 0;
+
+	// RELAY //
+volatile int relay_state = LOW;
+volatile int gate_output = LOW;
+volatile int trigger_output = LOW;
+
+	// GAMEPLAY //
+mode gameplay_mode = NONE;
+int pattern_index;
+int pattern_position;
+
+long patterns[][10] = { 	{5, 5, 4, 4, 3, 3, 2, 2, 1, 1},
+						{5, 1, 4, 2, 3, 3, 2, 4, 1, 5},
+						{1, 1, 2, 2, 3, 3, 4, 4, 5, 5},
+						{4, 4, 2, 2, 5, 5, 1, 1, 3, 3}
+					};
+
+int standby = 0;
 
 void setup() {
-  // The programming button is set to pullup using the internal resistors
-  // on the chip and interrupts are attached to its press and release
-  pinMode(PROG_BTN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(PROG_BTN), isr_prog_down, FALLING);
-  attachInterrupt(digitalPinToInterrupt(PROG_BTN), isr_prog_up, RISING);
-  // The trigger button is set to pullup using the internal resistors
-  // on the chip and an interrupt is attached to its press
-  pinMode(TRIG_BTN, INPUT_PULLUP);
-  attachInterrupt(digitalPinToInterrupt(TRIG_BTN), isr_trig_down, FALLING);
-  // The relay acts an an interface to the game board, and is pulled
-  // down using the internal resistors. When active, the pin is set
-  // to high, otherwise it is low.
-  pinMode(RELAY, OUTPUT);
+	// For debug
+	Serial.begin(9600);
+	randomSeed(analogRead(0));
+
+	// Configure pinouts for the controller
+	pinMode(PROGRAMMING_BUTTON, INPUT_PULLUP);
+	pinMode(TRIGGER_BUTTON, INPUT_PULLUP);
+	pinMode(RELAY, OUTPUT);
+
+	// Configure interrupts on the input buttons
+	attachInterrupt(digitalPinToInterrupt(PROGRAMMING_BUTTON), isr_programming, CHANGE);
+	attachInterrupt(digitalPinToInterrupt(TRIGGER_BUTTON), isr_trigger, CHANGE);
+
 }
 
 void loop() {
-  // put your main code here, to run repeatedly:
+	cycle_start = millis();
 
+	if(millis() - trigger_button_last_input >= trigger_active_period && trigger_output == HIGH) {
+		Serial.println("TRIGGER END");
+		trigger_output = LOW;
+	}
+
+	// Detect a long press of the programming button to activate pattern mode
+	if(millis() - programming_button_last_input >= long_press_threshold && programming_button_state == DOWN && gameplay_mode != PATTERN) {
+		Serial.println("ENTER PATTERN MODE");
+		gameplay_mode = PATTERN;
+		standby = !standby;
+	}
+
+	if(programming_button_state == DOWN && trigger_button_state == DOWN && gameplay_mode != RANDOM) {
+		Serial.println("ENTER RANDOM MODE");
+		gameplay_mode = RANDOM;
+		standby = !standby;
+	}
+
+	if(millis() >= next_relay_swap) {
+		if(gameplay_mode == PATTERN) {
+			next_relay_swap = millis() + patterns[pattern_index][++pattern_position] * 1000;
+			gate_output = !gate_output;
+		} else if(gameplay_mode == RANDOM) {
+			next_relay_swap = millis() + long(random(200, 1001));
+			gate_output = !gate_output;
+		}
+	}
+
+	relay_state = gate_output | trigger_output;
+	digitalWrite(RELAY, relay_state);
+	Serial.print(gate_output); Serial.print(trigger_output); Serial.println(relay_state);
+
+	while(standby) {
+		Serial.println("STANDING BY");
+	}
 }
 
 /**
- * Interrupt Service Routine: Programming -> Down
- * Detects start of input on the programming button. Sets the global 
- * 'prog_down' to the system time when the interrupt was triggered.
- * This is a blocking routine and it's completion time will not factor into 
- * the button press length.
+ * Interrupt Service Routine called on press and release of the programming button:
+ * If the interrupt doesn't bounce, update the state and timing variables for the
+ * associated button. 
  */
-void isr_prog_down() {
-  prog_down = millis();
+void isr_programming() {
+	if(millis() - programming_button_last_input >= contact_bounce) {
+		programming_button_last_input = millis();
+
+		if(programming_button_state == DOWN) {
+			programming_button_state = UP;
+			if(programming_button_hold_duration < long_press_threshold) {
+				standby = !standby;
+			}
+		} else {
+			programming_button_state = DOWN;
+		}
+
+		programming_button_hold_duration = 0;
+	}
 }
 
 /**
- * Interrupt Service Routine: Programming -> Up
- * Detects end of input on the programming button. Sets the global
- * 'prog_dur' variable based on 'prog_down' and the
- * system time when the interrupt was triggered.
+ * Interrupt Service Routine called on press and release of the programming button:
+ * If the interrupt doesn't bounce, update the state and timing variables for the
+ * associated button. 
  */
-void isr_prog_up() {
-  prog_dur = (millis() > prog_down) ?
-                               millis() - prog_down : (0xFFFFFFFF - prog_down) + millis();
- }
+void isr_trigger() {
+	if(millis() - trigger_button_last_input >= contact_bounce) {
+		trigger_button_last_input = millis();
 
-/**
- * Interrupt Service Routine: Trigger -> Down
- * Detects start of input on the trigger button. Sets the global
- * 'relay_active' to the system time when the interrupt was triggered. This
- * is a blocking routine, and cannot track the length of time that the relay
- * must remain open for, so that must be done from 
- */
- void isr_trig_down() {
-  digitalWrite(RELAY, HIGH);
-  
- }
+		if(trigger_button_state == DOWN) {
+			trigger_button_state = UP;
+		} else {
+			Serial.println("TRIGGER START");
+			trigger_button_state = DOWN;
+			trigger_output = HIGH;
+		}
+	}
+}
