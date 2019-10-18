@@ -12,6 +12,10 @@
 #define UP 					HIGH
 #define DOWN 				LOW
 
+// Set the bounds for random gate intervals
+#define RANDOM_LOWER_BOUND 600
+#define RANDOM_UPPER_BOUND 1401
+
 // Define the two major modes for automated state switching
 enum mode {
 	NONE,
@@ -97,7 +101,7 @@ void loop() {
 			next_relay_swap = millis() + patterns[pattern_index][++pattern_position] * 1000;
 			gate_output = !gate_output;
 		} else if(gameplay_mode == RANDOM) {
-			next_relay_swap = millis() + long(random(200, 1001));
+			next_relay_swap = millis() + long(random(RANDOM_LOWER_BOUND, RANDOM_UPPER_BOUND));
 			gate_output = !gate_output;
 		}
 	}
