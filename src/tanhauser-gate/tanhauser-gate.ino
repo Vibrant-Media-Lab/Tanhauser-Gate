@@ -13,8 +13,11 @@
 #define DOWN        LOW
 
 // Set the bounds for random gate intervals
-#define RANDOM_LOWER_BOUND 600
-#define RANDOM_UPPER_BOUND 1401
+#define RANDOM_LOWER_BOUND_UP 1600
+#define RANDOM_UPPER_BOUND_UP 2401
+#define RANDOM_LOWER_BOUND_DOWN 600
+#define RANDOM_UPPER_BOUND_DOWN 1401
+int rand_up = 0;
 #define NUM_PATTERNS       4
 
 // Define the two major modes for automated state switching
@@ -52,7 +55,8 @@ mode gameplay_mode = NONE;
 int pattern_index;
 int pattern_position;
 
-long patterns[NUM_PATTERNS][10] = {   {5, 5, 4, 4, 3, 3, 2, 2, 1, 1},
+long patterns[NUM_PATTERNS][10] = {   
+            {5, 5, 4, 4, 3, 3, 2, 2, 1, 1},
             {5, 1, 4, 2, 3, 3, 2, 4, 1, 5},
             {1, 1, 2, 2, 3, 3, 4, 4, 5, 5},
             {4, 4, 2, 2, 5, 5, 1, 1, 3, 3}
@@ -102,14 +106,16 @@ void loop() {
       next_relay_swap = millis() + patterns[pattern_index][++pattern_position] * 1000;
       gate_output = !gate_output;
     } else if(gameplay_mode == RANDOM) {
-      next_relay_swap = millis() + long(random(RANDOM_LOWER_BOUND, RANDOM_UPPER_BOUND));
+      if(rand_up) next_relay_swap = millis() + long(random(RANDOM_LOWER_BOUND_DOWN, RANDOM_UPPER_BOUND_DOWN));
+      else next_relay_swap = millis() + long(random(RANDOM_LOWER_BOUND_UP, RANDOM_UPPER_BOUND_UP));
+      rand_up = !rand_up;
       gate_output = !gate_output;
     }
   }
 
-  relay_state = gate_output | trigger_output;
+  relay_state = gate_output | !trigger_output;
   digitalWrite(RELAY, relay_state);
-  Serial.print(gate_output); Serial.print(trigger_output); Serial.println(relay_state);
+  Serial.print(gate_output); Serial.print(!trigger_output); Serial.println(relay_state);
 
   while(standby) {
     Serial.println("STANDING BY");
