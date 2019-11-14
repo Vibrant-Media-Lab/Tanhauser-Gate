@@ -41,7 +41,7 @@ volatile unsigned long programming_button_last_input = 0;
 volatile unsigned long programming_button_hold_duration = 0;
 
   // TRIGGER //
-const long trigger_active_period = 67; // Roughly 1/15 s
+const long trigger_active_period = 35; // Roughly 1/30 s
 volatile int trigger_button_state = UP;
 volatile unsigned long trigger_button_last_input = 0;
 
@@ -92,13 +92,11 @@ void loop() {
   if(millis() - programming_button_last_input >= long_press_threshold && programming_button_state == DOWN && gameplay_mode != PATTERN) {
     Serial.println("ENTER PATTERN MODE");
     gameplay_mode = PATTERN;
-    standby = !standby;
   }
 
   if(programming_button_state == DOWN && trigger_button_state == DOWN && gameplay_mode != RANDOM) {
     Serial.println("ENTER RANDOM MODE");
     gameplay_mode = RANDOM;
-    standby = !standby;
   }
 
   if(millis() >= next_relay_swap) {
@@ -113,12 +111,14 @@ void loop() {
     }
   }
 
-  relay_state = gate_output | !trigger_output;
-  digitalWrite(RELAY, relay_state);
-  Serial.print(gate_output); Serial.print(!trigger_output); Serial.println(relay_state);
+  if(gameplay_mode) relay_state = gate_output;
+  else relay_state = !trigger_output;
 
-  while(standby) {
-    Serial.println("STANDING BY");
+  digitalWrite(RELAY, relay_state);
+  Serial.print(gameplay_mode); Serial.print(gate_output); Serial.print(!trigger_output); Serial.println(relay_state);
+
+  if(standby) {
+    relay_state = DOWN;
     pattern_index = random(0, NUM_PATTERNS);
     pattern_position = 0;
   }
@@ -136,10 +136,11 @@ void isr_programming() {
     if(programming_button_state == DOWN) {
       programming_button_state = UP;
       if(programming_button_hold_duration < long_press_threshold) {
-        standby = !standby;
+        standby = 0;
       }
     } else {
       programming_button_state = DOWN;
+      standby = 1;
     }
 
     programming_button_hold_duration = 0;
