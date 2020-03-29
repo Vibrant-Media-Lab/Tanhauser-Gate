@@ -101,7 +101,7 @@ void loop() {
 
   if(millis() >= next_relay_swap) {
     if(gameplay_mode == PATTERN) {
-      next_relay_swap = millis() + patterns[pattern_index][++pattern_position] * 1000;
+      next_relay_swap = millis() + patterns[pattern_index][(++pattern_position)%10] * 1000;
       gate_output = !gate_output;
     } else if(gameplay_mode == RANDOM) {
       if(rand_up) next_relay_swap = millis() + long(random(RANDOM_LOWER_BOUND_DOWN, RANDOM_UPPER_BOUND_DOWN));
